@@ -1,6 +1,6 @@
 # bioLUCID
 
-Code for **bio**logica**L** and batch effect deconfo**U**nding by varian**C**e decompos**I**tion for scRNAseq **D**ata
+Code for bioLUCID: quantifying batch and biological effect in single-cell transcriptomics by hypothesis-driven variance decomposition
 
 ## Introduction
 
