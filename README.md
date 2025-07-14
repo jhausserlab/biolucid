@@ -10,21 +10,23 @@ bioLUCID is a Python package specifically designed for single-cell RNA sequencin
 
 1. **System Requirements**
 
-- Python >= 3.8
+- Python >= 3.10
 
 2. **pip installation**
 
 ```python
-pip install -i https://test.pypi.org/simple/ biolucid==1.0.6
+pip install -i https://test.pypi.org/simple/ biolucid==1.1.0
 ```
 
 ## Quick Start
 
 - See `tests/Human_PBMC_data_test.ipynb` to walk through bioLUCID tutorial.
 
-#### Step0: Preprocessing
+### Step0: Preprocessing
 
-- In the tutorial with provided example data, the preprocessing step has been done, including quality control and cell type annotation. 
+- bioLUCID requires data in AnnData format (adata object), which is the standard format for single-cell analysis in Python.
+
+- In the tutorial with provided example adata, the preprocessing step has been done, including quality control and cell type annotation. 
 
 - However, if the data is raw, we recommend a standard QC step before running bioLUCID:
 
@@ -41,16 +43,20 @@ pip install -i https://test.pypi.org/simple/ biolucid==1.0.6
   adata = adata[adata.obs.pct_counts_mt < 20, :].copy() # the cutoff can be modified
   ```
 
-#### Step1: Load data
+### Step1: Load data
 
 - We provide an example adata containing human pbmc data sequenced on different platforms, which can be downloaded [here](https://drive.google.com/file/d/1-Uuve3sndENFDuVdSm4Ltb3Lnee7LUl8/view?usp=sharing)
 - To make sure bioLUCID works, the input data should contain:
-  - Raw counts data (in `adata.X` or `adata.layers['counts']`)
-  - At least 2 samples
-  - In all samples, at least **2 cell types** with **more than 20 cells**
-  - In all samples and in all cell types, at least **100 ubiquitously expressed genes** with more than **1 UMIs** per cell
+  - unnormalized UMI counts data in `adata.X` or `adata.layers['counts']`
+  - sample identifiers in `adata.obs`, stored as a column `batch` by default (can be parametrized, see below)
+  - cell type strings in `adata.obs`, stored as a column `celltype` by default (can be parametrized, see below)
 
-#### Step2: Initialize analyzer
+These are the minimal data requirements to run bioLUCID:
+- At least 2 samples
+- In all samples, at least **2 cell types** with **more than 20 cells each**
+- In all samples and in all cell types, at least **100 ubiquitously expressed genes** with more than **1 UMIs** per cell on average
+
+### Step2: Initialize analyzer
 
 - Example command is:
 
@@ -61,6 +67,8 @@ pip install -i https://test.pypi.org/simple/ biolucid==1.0.6
           'batch_key': 'sample',         
           'celltype_key': 'celltype',
           'min_cells': 20,
+          'abundant_gene_threshold': 1,
+          'min_abundant_genes': 100,
       }
   )
   ```
@@ -69,15 +77,15 @@ pip install -i https://test.pypi.org/simple/ biolucid==1.0.6
 
 - All default parameters can be found in `biolucid.config.DEFAULT_PARAMS`
 
-#### Step3: Run analyzer
+### Step3: Run analyzer
 
 - The use of bioLUCID is extremely straightforward and only requires one line of code
 
-  ```
+  ```python
   analyzer.run_analysis()
   ```
 
-#### Step4: Save results and visualization
+### Step4: Save results and visualization
 
 - All statistical results can be summarized through `analyzer.results` function into a dictionary, which can be further saved through `pickle`
 
@@ -91,14 +99,34 @@ pip install -i https://test.pypi.org/simple/ biolucid==1.0.6
 - We also provide a data conversion function `results_to_df()` that can convert into a more readable dataframe (also to prepare for subsequent visualization)
 
   ```python
-  global_results_df,per_sample_results_df = biolucid.visualization.results_to_df(results)
+  global_results_df, per_sample_results_df = biolucid.visualization.results_to_df(results)
   ```
 
-- When it comes to visualization , we provided one visualization function: `plot_scatter_analysis` to generate qsh_qsp plot
+#### Results Example
 
-    ```python
-    biolucid.visualization.plot_scatter_analysis(per_sample_results_df)
-    ```
+The `per_sample_results_df` will contain results in the following format:
+
+|  | q_sh_score_per_batch | q_sp_score_per_batch | b_score_per_batch | recommendation |
+|--------|---------------------|---------------------|------------------|----------------|
+| 10x-Chromium-v2-A | 0.160767 | 0.075598 | 0.818920 | Drop |
+| 10x-Chromium-v2-B | 0.173909 | 0.054345 | 0.911036 | Drop |
+| 10x-Chromium-v3 | 0.240570 | 0.101513 | 0.848854 | Drop |
+
+**Column Descriptions:**
+- `q_sh_score_per_batch`: Estimated magnitude of variation shared across the cell types
+- `q_sp_score_per_batch`: Estimated magnitude of variation specific to a cell type
+- `b_score_per_batch`: The relative contribution of batch effects to gene expression
+- `recommendation`: Recommendation for sample selection
+
+Both q_sh and q_sp are measured in units of standard deviation on log expression. See our manuscript for details. At the same time, we also provide advice on the selection of each sample.
+
+#### Visualization
+
+When it comes to visualization, we provided one visualization function: `plot_scatter_analysis` to generate qsh_qsp plot
+
+```python
+biolucid.visualization.plot_scatter_analysis(per_sample_results_df)
+```
 
 ## License
 
