@@ -6,7 +6,7 @@ and general utility functions used throughout the analysis pipeline.
 """
 
 import logging
-from typing import Tuple, Set, Optional, Dict
+from typing import Tuple, Dict
 import numpy as np
 import pandas as pd
 import scipy.sparse
@@ -206,27 +206,22 @@ def normalize_data(adata: AnnData) -> AnnData:
     
     return adata
 
-def preprocess_data(adata: AnnData, params: Dict) -> Tuple[AnnData, AnnData, np.ndarray]:
+def preprocess_data(adata: AnnData, params: Dict) -> AnnData:
     """
     Complete preprocessing pipeline.
     
     Workflow:
     1. Validate batches and filter cell types
     2. Select abundant genes
-    3. Create and normalize two datasets:
-       - Full dataset for biological scores
-       - Abundant genes dataset for batch effects
+    3. Create and normalize one dataset:
+       - Abundant genes dataset for batch effects analysis
     
     Args:
         adata: Input data
         params: Analysis parameters
         
     Returns:
-        Tuple of (
-            normalized data with all genes for biological scores,
-            normalized data with abundant genes for batch scores,
-            indices of abundant genes
-        )
+        normalized data with abundant genes for batch scores,
     """
     # 1. Validate and filter cell types
     adata_ct_selection = validate_and_filter_celltypes(adata, params)
@@ -235,27 +230,6 @@ def preprocess_data(adata: AnnData, params: Dict) -> Tuple[AnnData, AnnData, np.
     adata_ct_genes_selection, abundant_genes = select_abundant_genes(adata_ct_selection, params)
     
     # 3. Normalize both datasets
-    adata_bio = normalize_data(adata_ct_selection)  # all genes for biological scores
     adata_batch = normalize_data(adata_ct_genes_selection)  # abundant genes for batch scores
     
-    return adata_bio, adata_batch, abundant_genes
-
-def get_data_summary(adata: AnnData, params: Dict) -> Dict:
-    """
-    Generate summary statistics about the dataset.
-    
-    Args:
-        adata: Data object
-        params: Analysis parameters
-        
-    Returns:
-        Dictionary containing summary statistics
-    """
-    return {
-        'n_cells': len(adata),
-        'n_genes': adata.n_vars,
-        'n_batches': adata.obs[params['batch_key']].nunique(),
-        'n_celltypes': adata.obs[params['celltype_key']].nunique(),
-        'batch_sizes': adata.obs[params['batch_key']].value_counts().to_dict(),
-        'celltype_sizes': adata.obs[params['celltype_key']].value_counts().to_dict()
-    } 
+    return adata_batch

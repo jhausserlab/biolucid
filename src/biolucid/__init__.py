@@ -3,7 +3,6 @@ bioLUCID - A tool for batch effect analysis in single-cell RNA sequencing data.
 """
 
 
-
 from . import core
 from . import visualization
 from . import utils

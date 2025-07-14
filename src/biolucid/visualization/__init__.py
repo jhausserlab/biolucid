@@ -1,7 +1,6 @@
-from .plots import create_analysis_df, plot_scatter_analysis, plot_scores_bar
+from .plots import results_to_df, plot_scatter_analysis
 
 __all__ = [
-    'create_analysis_df',
-    'plot_scatter_analysis',
-    'plot_scores_bar'
+    'results_to_df',
+    'plot_scatter_analysis'
 ]

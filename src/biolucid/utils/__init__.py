@@ -4,8 +4,7 @@ from .preprocessing import (
     select_abundant_genes,
     get_counts_matrix,
     normalize_data,
-    preprocess_data,
-    get_data_summary
+    preprocess_data
 )
 
 __all__ = [
@@ -14,6 +13,5 @@ __all__ = [
     'select_abundant_genes',
     'get_counts_matrix',
     'normalize_data',
-    'preprocess_data',
-    'get_data_summary'
+    'preprocess_data'
 ]

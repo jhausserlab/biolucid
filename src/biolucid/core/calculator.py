@@ -1,58 +1,62 @@
 """
 Core calculation functions for batch effect and biological effect analysis.
 
-This module implements the mathematical calculations for both batch effect
-and biological effect analysis, including:
-- Batch effect component calculation
-- Differential expression analysis
-- Pathway enrichment analysis
-- Score calculations
+This module implements the mathematical calculations for both batch effect analysis, including:
+- Likelihood estimation formula for each parameter
+- Calculation of q_sh and q_sp scores
 """
 
 import logging
-from typing import Dict, Tuple, List, Optional
+from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
-import scipy.sparse
 import scanpy as sc
-import gseapy as gp
 from anndata import AnnData
-from .models import BatchEffectResult, BiologicalEffectResult
-from ..config.settings import get_pathway_dbs
+from .models import bioLUCIDResult
 
 logger = logging.getLogger(__name__)
 
-def calculate_means(data: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
+def calculate_per_sample_cluster_means(data: pd.DataFrame) -> pd.Series:
     """
-    Calculate global and group-specific means.
+    Calculate group-specific means.
     
     Args:
         data: DataFrame with columns [sample_id, cluster_id, gene_id, expression_value]
         
     Returns:
-        Tuple containing:
-        - X_mean: Global mean expression per gene
-        - X_st: Mean expression per sample-cluster-gene combination
+        X_st: Mean expression per sample-cluster-gene combination
     """
-    # Calculate global mean per gene
-    X_mean = data.groupby('gene_id')['expression_value'].mean()
-    
-    # Calculate mean per sample-cluster combination
     X_st = data.groupby(['sample_id', 'cluster_id', 'gene_id'])['expression_value'].mean()
     
-    return X_mean, X_st
+    return X_st
+
+def calculate_μ(data: pd.Series) -> pd.Series:
+    """
+    Calculate μ (global mean expression per gene).
+    Likelihood estimation formula: μ = 1/st * ΣstX_st
+
+    Args:
+        data: X_st
+        
+    Returns:
+        μ: Global mean expression per gene
+    """
+    
+    μ = data.groupby('gene_id').mean()
+
+    return μ
 
 def calculate_cluster_effect(
     X_st: pd.Series,
-    X_mean: pd.Series
+    μ: pd.Series
 ) -> pd.Series:
     """
-    Calculate cluster effect (∆t).
-    Formula: ∆t = 1/s * Σs(X_st - X_mean)
+    Calculate cluster effect (tau_t).
+    Likelihood estimation formula: tau_t = 1/s * Σs(X_st - μ)
     
     Args:
         X_st: Sample-cluster means
-        X_mean: Global means
+        μ: Global means
         
     Returns:
         Cluster effect per cluster-gene combination
@@ -62,66 +66,189 @@ def calculate_cluster_effect(
     
     # Merge and calculate differences
     merged = X_st_df.merge(
-        X_mean.reset_index(),
+        μ.reset_index(),
         on=['gene_id'],
         suffixes=('_st', '_mean')
     )
     
     # Calculate cluster effect
-    delta_t = (merged
+    tau_t = (merged
               .groupby(['cluster_id', 'gene_id'])
               .apply(lambda x: (x['expression_value_st'] - x['expression_value_mean']).mean()))
     
-    return delta_t
+    return tau_t
 
 def calculate_sample_effect(
     X_st: pd.Series,
-    X_mean: pd.Series,
-    delta_t: pd.Series
+    μ: pd.Series,
 ) -> pd.Series:
     """
-    Calculate sample effect (∆s).
-    Formula: ∆s = 1/t * Σt(X_st - X_mean - ∆t)
+    Calculate sample effect (sigma_s).
+    Likelihood estimation formula: sigma_s = 1/t * Σt(X_st - μ)
     
     Args:
         X_st: Sample-cluster means
-        X_mean: Global means
-        delta_t: Cluster effects
+        μ: Global means
         
     Returns:
         Sample effect per sample-gene combination
     """
     # Prepare data
     X_st_df = X_st.reset_index()
-    merged = (X_st_df
-             .merge(X_mean.reset_index(),
-                   on=['gene_id'],
-                   suffixes=('_st', '_mean'))
-             .merge(delta_t.reset_index(),
-                   on=['cluster_id', 'gene_id']))
+    merged = X_st_df.merge(
+        μ.reset_index(),
+        on=['gene_id'],
+        suffixes=('_st', '_mean')
+    )
     
     # Calculate sample effect
-    delta_s = (merged
+    sigma_s = (merged
               .groupby(['sample_id', 'gene_id'])
               .apply(lambda x: (x['expression_value_st'] - 
-                              x['expression_value_mean'] - 
-                              x[0]).mean()))
+                              x['expression_value_mean']).mean()))
     
-    return delta_s
+    return sigma_s
 
-def calculate_batch_effect(
+def calculate_residuals(
+    X_st: pd.Series,
+    μ: pd.Series,
+    tau_t: pd.Series,
+    sigma_s: pd.Series
+) -> pd.DataFrame:
+    """
+    Calculate residuals (ϵst).
+    Formula: ϵst = X_st - μ - sigma_s - tau_t
+    
+    Args:
+        X_st: Sample-cluster means
+        μ: Global means
+        tau_t: Cluster effects
+        sigma_s: Sample effects
+        
+    Returns:
+        Residuals DataFrame
+    """
+    # Prepare data
+    X_st_df = X_st.reset_index()
+    μ_df = μ.reset_index()
+    tau_t_df = tau_t.reset_index().rename(columns={0: 'tau_t_value'})
+    sigma_s_df = sigma_s.reset_index().rename(columns={0: 'sigma_s_value'})
+    
+    # Merge - the first merge will create _x and _y suffixes for expression_value
+    merged = (X_st_df
+             .merge(μ_df, on=['gene_id'])  # Creates expression_value_x (X_st) and expression_value_y (μ)
+             .merge(tau_t_df, on=['cluster_id', 'gene_id'])
+             .merge(sigma_s_df, on=['sample_id', 'gene_id']))
+    
+    # Calculate residuals using the pandas-generated column names
+    residuals = (merged['expression_value_x'] -    # X_st values
+                merged['expression_value_y'] -     # μ values
+                merged['tau_t_value'] -             # τ_t values
+                merged['sigma_s_value'])            # σ_s values
+    
+    residuals_df = pd.DataFrame({
+        'sample_id': merged['sample_id'],
+        'cluster_id': merged['cluster_id'],
+        'gene_id': merged['gene_id'],
+        'residuals': residuals
+    })
+
+    return residuals_df
+
+def calculate_q_sh_per_sample(sigma_s: pd.Series) -> Dict[str, float]:
+    """
+    Calculate amount of gene expression variation that is shared across celltypes per sample.
+    Formula: q_sh = (1/g * Σg(sigma_s)²)^(1/2)
+    
+    Args:
+        sigma_s: batch effects vector (sample-gene level)
+        
+    Returns:
+        Dict mapping sample_id to q_sh score
+    """
+    sigma_s_df = sigma_s.reset_index()
+    
+    # Calculate q_sh per sample
+    q_sh_per_sample = {
+        sample: np.sqrt(np.mean(group[0] ** 2))
+        for sample, group in sigma_s_df.groupby('sample_id')
+    }
+    
+    return q_sh_per_sample
+
+def calculate_q_sp_per_sample(residuals_df: pd.DataFrame) -> Dict[str, float]:
+    """
+    Calculate amount of gene expression variation that is specific to a cell type per sample.
+    Formula: q_sp = (1/gt * Σgt(ϵst)²)^(1/2)
+    
+    Args:
+        residuals_df: DataFrame containing residuals
+        
+    Returns:
+        Dict mapping sample_id to q_sp score
+    """
+    # Calculate q_sp per sample (average over genes and cell types within each sample)
+    q_sp_per_sample = {
+        sample: np.sqrt(np.mean(group['residuals'] ** 2))
+        for sample, group in residuals_df.groupby('sample_id')
+    }
+    
+    return q_sp_per_sample
+
+def calculate_b_scores_per_sample(
+    q_sh_per_sample: Dict[str, float],
+    q_sp_per_sample: Dict[str, float]
+) -> Dict[str, float]:
+    """
+    Calculate proportion of batch effect per sample (b score).
+    Formula: b_s = q_sh² / (q_sh² + q_sp²)
+    
+    Args:
+        q_sh_per_sample: Dict of q_sh scores per sample
+        q_sp_per_sample: Dict of q_sp scores per sample
+        
+    Returns:
+        Dict of b scores per sample
+    """
+    b_scores_per_sample = {}
+    
+    for sample in q_sh_per_sample.keys():
+        q_sh_squared = q_sh_per_sample[sample] ** 2
+        q_sp_squared = q_sp_per_sample[sample] ** 2
+        b_scores_per_sample[sample] = q_sh_squared / (q_sh_squared + q_sp_squared)
+    
+    return b_scores_per_sample
+
+def calculate_global_scores(
+    q_sh_per_sample: Dict[str, float],
+    q_sp_per_sample: Dict[str, float],
+    b_scores_per_sample: Dict[str, float]
+) -> Tuple[float, float, float]:
+    """
+    Calculate global scores by averaging across samples.
+    
+    Returns:
+        Tuple of (global_q_sh, global_q_sp, global_b_score)
+    """
+    global_q_sh = np.mean(list(q_sh_per_sample.values()))
+    global_q_sp = np.mean(list(q_sp_per_sample.values()))
+    global_b_score = np.mean(list(b_scores_per_sample.values()))
+    
+    return global_q_sh, global_q_sp, global_b_score
+
+def bioLUCID_calculation(
     adata: AnnData,
     params: Dict
-) -> BatchEffectResult:
+) -> bioLUCIDResult:
     """
-    Calculate batch effect scores.
+    Calculate batch and biological effect scores and store them in a bioLUCIDResult object.
     
     Args:
         adata: Input data
         params: Analysis parameters
         
     Returns:
-        BatchEffectResult containing scores and components
+        bioLUCIDResult containing scores and components
     """
     
     # Prepare data
@@ -143,344 +270,43 @@ def calculate_batch_effect(
         value_name='expression_value'
     )
     
-    # Calculate components
-    X_mean, X_st = calculate_means(data)
-    delta_t = calculate_cluster_effect(X_st, X_mean)
-    delta_s = calculate_sample_effect(X_st, X_mean, delta_t)
+    # Calculate components according to mentor's formulas
+    X_st = calculate_per_sample_cluster_means(data)
+    μ = calculate_μ(X_st)
+    tau_t = calculate_cluster_effect(X_st, μ)
+    sigma_s = calculate_sample_effect(X_st, μ)
     
     # Calculate residuals
-    residuals = calculate_residuals(X_st, X_mean, delta_t, delta_s)
+    residuals_df = calculate_residuals(X_st, μ, tau_t, sigma_s)
+
+    # Calculate batch effect scores per sample
+    q_sh_per_sample = calculate_q_sh_per_sample(sigma_s)
+    q_sp_per_sample = calculate_q_sp_per_sample(residuals_df)
+    b_scores_per_sample = calculate_b_scores_per_sample(q_sh_per_sample, q_sp_per_sample)
     
-    # Calculate scores
-    B_scores = calculate_B_scores(delta_s)
-    b_scores = calculate_b_scores(B_scores, residuals)
-    
-    return BatchEffectResult(
-        b_score=b_scores['global'],
-        B_score=B_scores['global'],
-        b_scores_per_batch=b_scores['per_batch'],
-        B_scores_per_batch=B_scores['per_batch'],
-        components={
-            'X_mean': X_mean,
-            'X_st': X_st,
-            'delta_t': delta_t,
-            'delta_s': delta_s
-        },
-        residuals=residuals
+    # Calculate global scores
+    global_q_sh, global_q_sp, global_b_score = calculate_global_scores(
+        q_sh_per_sample, q_sp_per_sample, b_scores_per_sample
     )
+    
+    return bioLUCIDResult(
 
-def calculate_residuals(
-    X_st: pd.Series,
-    X_mean: pd.Series,
-    delta_t: pd.Series,
-    delta_s: pd.Series
-) -> pd.Series:
-    """
-    Calculate residuals (ϵst).
-    Formula: ϵst = X_st - X_mean - ∆s - ∆t
-    
-    Args:
-        X_st: Sample-cluster means
-        X_mean: Global means
-        delta_t: Cluster effects
-        delta_s: Sample effects
-        
-    Returns:
-        Residual values
-    """
-    # Prepare data
-    X_st_df = X_st.reset_index()
-    
-    # Merge all components
-    merged = (X_st_df
-             .merge(X_mean.reset_index(),
-                   on=['gene_id'],
-                   suffixes=('_st', '_mean'))
-             .merge(delta_t.reset_index(),
-                   on=['cluster_id', 'gene_id'])
-             .merge(delta_s.reset_index(),
-                   on=['sample_id', 'gene_id']))
-    
-    # Calculate residuals
-    residuals = (merged['expression_value_st'] - 
-                merged['expression_value_mean'] - 
-                merged['0_x'] -  # delta_t
-                merged['0_y'])   # delta_s
-    
-    residuals_df = pd.DataFrame({
-        'sample_id': X_st_df['sample_id'],
-        'cluster_id': X_st_df['cluster_id'],
-        'gene_id': X_st_df['gene_id'],
-        'residuals': residuals
-    })
+        # Global scores
+        Global_b_score=global_b_score,
+        Global_q_sh_score=global_q_sh,
+        Global_q_sp_score=global_q_sp,
 
-    return residuals_df
+        # Per-sample scores
+        b_score_per_batch=b_scores_per_sample,
+        q_sh_score_per_batch=q_sh_per_sample,
+        q_sp_score_per_batch=q_sp_per_sample,
 
-def calculate_B_scores(delta_s: pd.Series) -> Dict[str, float]:
-    """
-    Calculate batch effect magnitude (B score).
-    Formula: B = 1/sg * Σsg(∆sg)²
-    
-    Args:
-        delta_s: Sample effects
-        
-    Returns:
-        Dictionary with global and per-batch B scores
-    """
-    delta_s_df = delta_s.reset_index()
-    
-    # Calculate global B score
-    B_score = np.mean(delta_s_df[0] ** 2)
-    
-    # Calculate per-batch B scores
-    B_scores_per_batch = {
-        sample: np.mean(group[0] ** 2)
-        for sample, group in delta_s_df.groupby('sample_id')
-    }
-    
-    return {
-        'global': B_score,
-        'per_batch': B_scores_per_batch
-    }
-
-def calculate_b_scores(
-    B_scores: Dict[str, float],
-    residuals_df: pd.DataFrame
-) -> Dict[str, float]:
-    """
-    Calculate proportion of batch effect (b score).
-    Formula: b = B / (B + 1/sgt·Σϵstg²)
-    
-    Args:
-        B_scores: B score values
-        residuals_df: DataFrame containing residuals and batch information
-        
-    Returns:
-        Dictionary with global and per-batch b scores
-    """
-    # Calculate global epsilon sum
-    epsilon_sum = np.mean(residuals_df['residuals'] ** 2)
-    
-    epsilon_sums_per_batch = {
-        sample: np.mean(group['residuals'] ** 2)
-        for sample, group in residuals_df.groupby('sample_id')
-    }
-
-    # Calculate global b score
-    b_score = B_scores['global'] / (B_scores['global'] + epsilon_sum)
-    
-    # Calculate per-batch b scores
-    b_scores_per_batch = {
-        sample: B_s / (B_s + eps_sum)
-        for sample, (B_s, eps_sum) in 
-        zip(B_scores['per_batch'].keys(),
-            zip(B_scores['per_batch'].values(),
-                epsilon_sums_per_batch.values()))
-    }
-    
-    return {
-        'global': b_score,
-        'per_batch': b_scores_per_batch
-    }
-
-def calculate_expression_profile(
-    adata: AnnData,
-    batch: str,
-    celltype: str,
-    params: Dict
-) -> pd.Series:
-    """
-    Calculate average gene expression profile for a specific batch-celltype combination.
-    
-    Args:
-        adata: Input data
-        batch: Batch identifier
-        celltype: Cell type identifier
-        params: Analysis parameters
-        
-    Returns:
-        Average expression profile as pandas Series
-    """
-    # Get specific batch and celltype cells
-    mask = (adata.obs[params['batch_key']] == batch) & \
-           (adata.obs[params['celltype_key']] == celltype)
-    subset = adata[mask]
-
-    if 'logTPM' not in subset.layers:
-        raise ValueError("logTPM layer not found. Run preprocessing first.")
-    
-    # Calculate mean expression
-    if scipy.sparse.issparse(subset.layers['logTPM']):
-        profile = pd.Series(
-            np.array(subset.layers['logTPM'].mean(axis=0)).flatten(),
-            index=adata.var_names
-        )
-    else:
-        profile = pd.Series(
-            subset.layers['logTPM'].mean(axis=0),
-            index=adata.var_names
-        )
-    
-    return profile
-
-def get_ranked_genes(
-    adata: AnnData,
-    batch: str,
-    celltype: str,
-    params: Dict
-) -> pd.Series:
-    """
-    Get ranked gene list based on expression profile difference.
-    
-    Args:
-        adata: Input data
-        batch: Batch identifier
-        celltype: Cell type identifier
-        params: Analysis parameters
-        
-    Returns:
-        Ranked gene list with differences as values
-    """
-    # Get batch-specific profile
-    batch_profile = calculate_expression_profile(adata, batch, celltype, params)
-    
-    # Get overall celltype profile (including the batch)
-    celltype_mask = adata.obs[params['celltype_key']] == celltype
-    celltype_adata = adata[celltype_mask]
-    
-    if scipy.sparse.issparse(celltype_adata.layers['logTPM']):
-        overall_profile = pd.Series(
-            np.array(celltype_adata.layers['logTPM'].mean(axis=0)).flatten(),
-            index=adata.var_names
-        )
-    else:
-        overall_profile = pd.Series(
-            celltype_adata.layers['logTPM'].mean(axis=0),
-            index=adata.var_names
-        )
-    
-    # Calculate difference
-    diff_profile = batch_profile - overall_profile
-    
-    # Sort by from highest to lowest difference
-    ranked_genes = diff_profile.sort_values(ascending=False)
-    
-    return ranked_genes
-
-def run_enrichment(
-    ranked_genes: pd.Series,
-    species: str,
-    params: Dict
-) -> Optional[pd.DataFrame]:
-    """
-    Run GSEA enrichment analysis.
-    
-    Args:
-        ranked_genes: Ranked gene list
-        species: Species name
-        params: Analysis parameters
-        
-    Returns:
-        Enrichment results or None if analysis fails
-    """
-    if ranked_genes.empty:
-        return None
-        
-    try:
-        # Get appropriate databases
-        databases = get_pathway_dbs(species)
-        
-        # Convert series to rnk format
-        rnk = pd.Series(
-            ranked_genes.values,
-            index=ranked_genes.index
-        )
-        
-        # Run GSEA
-        enr = gp.prerank(
-            rnk=rnk,
-            gene_sets=databases,
-            organism=species,
-            processes=params['processes'],
-            permutation_num=params['permutation_num'],
-            min_size=params['min_size'],
-            max_size=params['max_size'],
-            seed=params['seed']
-        )
-        
-        return enr.res2d
-        
-    except Exception as e:
-        logger.warning(f"Enrichment analysis failed: {str(e)}")
-        return None
-
-def calculate_pathway_score(
-    enrichment_results: pd.DataFrame
-) -> float:
-    """
-    Calculate pathway-based biological effect score using FDR q-values.
-    """
-    if enrichment_results is None or len(enrichment_results) == 0:
-        return 0.0
-    
-    # Use FDR q-val instead of adjusted p-value
-    score = sum(1 - enrichment_results['FDR q-val']) / len(enrichment_results)
-    return score
-
-def calculate_biological_effect(adata: AnnData, params: Dict) -> BiologicalEffectResult:
-    """Calculate biological effect scores."""
-    # Verify required data layers
-    for layer in ['counts', 'logTPM']:
-        if layer not in adata.layers:
-            raise ValueError(f"{layer} layer not found. Run preprocessing first.")
-    
-    batches = adata.obs[params['batch_key']].unique()
-    celltypes = adata.obs[params['celltype_key']].unique()
-    
-    logger.info(f"Analyzing {len(batches)} batches and {len(celltypes)} cell types")
-    
-    celltype_scores = {}
-    batch_scores = {}
-    enrichment_results = {}
-    
-    for batch in batches:
-        celltype_scores[batch] = {}
-        enrichment_results[batch] = {}
-        
-        for celltype in celltypes:
-            logger.info(f"Processing batch {batch}, celltype {celltype}")
-            
-            # Get ranked genes
-            ranked_genes = get_ranked_genes(adata, batch, celltype, params)
-            logger.info(f"Found and Rank {len(ranked_genes)} differentially expressed genes")
-            
-            # Run enrichment and calculate score
-            if len(ranked_genes) > 0:
-                enrichment = run_enrichment(ranked_genes, params['species'], params)
-                if enrichment is not None and len(enrichment) > 0:
-                    score = calculate_pathway_score(enrichment)
-                    logger.info(f"Enrichment analysis successful, score: {score:.3f}")
-                else:
-                    score = 0.0
-                    logger.warning("No significant enrichment found")
-            else:
-                score = 0.0
-                logger.warning("No differentially expressed genes found")
-            
-            celltype_scores[batch][celltype] = score
-            enrichment_results[batch][celltype] = enrichment
-        
-        # Calculate batch score
-        batch_scores[batch] = np.mean(list(celltype_scores[batch].values()))
-        logger.info(f"Batch {batch} score: {batch_scores[batch]:.3f}")
-    
-    # Calculate summary score
-    summary_score = np.mean(list(batch_scores.values()))
-    logger.info(f"Overall biological effect score: {summary_score:.3f}")
-    
-    return BiologicalEffectResult(
-        Biological_summary_score=summary_score,
-        Biological_batch_scores=batch_scores,
-        Biological_celltype_scores=celltype_scores,
-        Biological_enrichment_results=enrichment_results
-    ) 
+        # Components
+        components={
+            'μ': μ,
+            'X_st': X_st,
+            'tau_t': tau_t,
+            'sigma_s': sigma_s,
+            'residuals':residuals_df
+        }
+    )

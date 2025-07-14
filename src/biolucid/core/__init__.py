@@ -1,14 +1,12 @@
-from .analyzer import Analyzer
-from .models import BatchEffectResult, BiologicalEffectResult, AnalysisResult
+from .analyzer import BatchEffectAnalyzer
+from .models import bioLUCIDResult
 from ..config.settings import DEFAULT_PARAMS
 from .. import visualization
 
 # Specify which symbols should be exported
 __all__ = [
-    'Analyzer',
-    'BatchEffectResult',
-    'BiologicalEffectResult',
-    'AnalysisResult',
+    'BatchEffectAnalyzer',
+    'bioLUCIDResult',
     'DEFAULT_PARAMS',
     'visualization'
 ]
