@@ -38,6 +38,14 @@ def results_to_df(results) -> Tuple[pd.DataFrame, pd.DataFrame]:
         'q_sp_score_per_batch': results.q_sp_score_per_batch,
         'b_score_per_batch': results.b_score_per_batch,
     })
+
+    # add selection suggestions
+    per_sample_results_df['recommendation'] = pd.cut(
+        per_sample_results_df['b_score_per_batch'],
+        bins=[-float('inf'), 0.6, 0.8, float('inf')],
+        labels=['Keep', 'Keep with caution', 'Drop'],
+        include_lowest=True
+    )
     
     return global_results_df, per_sample_results_df
 

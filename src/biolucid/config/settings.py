@@ -16,7 +16,7 @@ DEFAULT_PARAMS = {
     # Filtering parameters
     'min_cells': 20,                # Minimum cells per cell type
     'abundant_gene_threshold': 1,    # Minimum UMI/cell for abundant genes
-    'min_abundant_genes': 300,      # Minimum number of abundant genes required
+    'min_abundant_genes': 100,      # Minimum number of abundant genes required
 }
 
 
