@@ -15,7 +15,7 @@ bioLUCID is a Python package specifically designed for single-cell RNA sequencin
 2. **pip installation**
 
 ```python
-pip install -i https://test.pypi.org/simple/ biolucid==1.0.5
+pip install -i https://test.pypi.org/simple/ biolucid==1.0.6
 ```
 
 ## Quick Start
