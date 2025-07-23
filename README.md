@@ -45,6 +45,7 @@ pip install -i https://test.pypi.org/simple/ biolucid==1.1.0
 
 ### Step1: Load data
 
+- The general guideline is to give to bioLUCID the set of samples that you plan to contrast in the downstream analysis. Avoid processing sets of samples from very different tissues tissue types. For example, passing whole tissue scRNAseq from lung and brain to bioLUCID will cause practical issues (finding common cell types and ubiquitously-expressed genes) as well as fundemental ones (all lung cell types may have common transcriptional differences compared to all brain cell types, which bioLUCID will interpret as batch).
 - We provide an example adata containing human pbmc data sequenced on different platforms, which can be downloaded [here](https://drive.google.com/file/d/1-Uuve3sndENFDuVdSm4Ltb3Lnee7LUl8/view?usp=sharing)
 - To make sure bioLUCID works, the input data should contain:
   - unnormalized UMI counts data in `adata.X` or `adata.layers['counts']`
