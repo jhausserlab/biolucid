@@ -1,10 +1,40 @@
 # bioLUCID
 
-Code for bioLUCID: quantifying batch and biological effect in single-cell transcriptomics by hypothesis-driven variance decomposition
+bioLUCID is a Python package to quantify batch and biological effects in a collection of single-cell RNA sequencing (scRNAseq) samples.
 
-## Introduction
+Batch-correcting single-cell gene expression data enables multi-sample analyses but risks erasing sample-specific biology along with batch effects. To address this, we introduce bioLUCID, a heuristic to decompose gene expression variation into biological and batch effects. This decomposition allows (i) integrating cell embeddings across samples without erasing sample-specific biology, and (ii) flagging samples with excessive batch effects, with benefits for multiple applications such as exploring transcriptional heterogeneity and multi-omics integration.
 
-bioLUCID is a Python package specifically designed for single-cell RNA sequencing (scRNA-seq) data analysis, focused on quantification of batch effects and biological variations. Through variance decomposition, bioLUCID effectively distinguishes and quantifies variations from different sources (samples), to better understand technical batch effects and biological signals within scRNA-seq data.
+A pre-print describing the approach is available on [Research Square](https://www.researchsquare.com/article/rs-7290456/v1)
+
+Silas Chen, Alper Eroglu, Jean Hausser at Karolinska Institutet & SciLifeLab, Stockholm Sweden
+
+## Quick start
+
+```python
+$ pip install
+```
+
+```python
+# Replace the line below with your adata object
+adata =
+
+# Run bioLUCID
+biolyzer = biolucid.core.BatchEffectAnalyzer(
+    adata,
+    params={'batch_key': 'sample',
+            'celltype_key': 'celltype'})
+biolyzer.run_analysis()
+
+# Visualize the results
+global_results_df, per_sample_results_df =
+biolucid.visualization.results_to_df(biolyzer.results)
+[per_sample_table]
+biolucid.visualization.plot_scatter_analysis(per_sample_results_df)
+[plot] 
+```
+
+
+# User manual
 
 ## Installation
 
