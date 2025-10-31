@@ -11,12 +11,12 @@ Silas Sun, Alper Eroglu, Jean Hausser at Karolinska Institutet & SciLifeLab, Sto
 ## Quick start
 
 ```python
-$ pip install
+$ pip install -i https://test.pypi.org/simple/ biolucid==1.1.0
 ```
 
 ```python
 # Replace the line below with your adata object
-adata =
+adata = ...
 
 # Run bioLUCID
 biolyzer = biolucid.core.BatchEffectAnalyzer(
