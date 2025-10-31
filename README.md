@@ -6,7 +6,7 @@ Batch-correcting single-cell gene expression data enables multi-sample analyses 
 
 A pre-print describing the approach is available on [Research Square](https://www.researchsquare.com/article/rs-7290456/v1)
 
-Silas Chen, Alper Eroglu, Jean Hausser at Karolinska Institutet & SciLifeLab, Stockholm Sweden
+Silas Sun, Alper Eroglu, Jean Hausser at Karolinska Institutet & SciLifeLab, Stockholm Sweden
 
 ## Quick start
 
