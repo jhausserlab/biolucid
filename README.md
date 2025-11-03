@@ -16,23 +16,20 @@ Silas Sun, Alper Eroglu, Jean Hausser at Karolinska Institutet & SciLifeLab, Sto
    pip install -i https://test.pypi.org/simple/ biolucid==1.1.0
    ```
 
-2. **Download the example data**
-
-   We provide a small, ready-to-use AnnData example (bioLUCID_example_data.h5ad) [here](https://drive.google.com/file/d/1M4-dck3PCICstxxSJ4v51QBYiUpZNQhV/view?usp=sharing). Save it next to your notebook or script.
-
-3. **Run the analyzer**
+2. **Run the analyzer**
 
    ```python
    import scanpy as sc
    import biolucid
+   import scvi
 
-   adata = sc.read("bioLUCID_example_data.h5ad")
+   adata = scvi.data.heart_cell_atlas_subsampled()
 
    analyzer = biolucid.core.BatchEffectAnalyzer(
        adata,
        params={
-           "batch_key": "sample",
-           "celltype_key": "celltype"
+           "batch_key": "donor",
+           "celltype_key": "cell_type"
        }
    )
    analyzer.run_analysis()
@@ -40,21 +37,31 @@ Silas Sun, Alper Eroglu, Jean Hausser at Karolinska Institutet & SciLifeLab, Sto
    global_results_df, per_sample_results_df = biolucid.visualization.results_to_df(analyzer.results)
    ```
 
-4. **Inspect per-sample statistics**
+3. **Inspect per-sample statistics**
+   | Sample | q_sh_score_per_batch | q_sp_score_per_batch | b_score_per_batch | Recommendation       |
+   |:-------|----------------------:|----------------------:|------------------:|:---------------------|
+   | D1     | 0.145850             | 0.122976             | 0.584476          | Keep                 |
+   | D2     | 0.116988             | 0.101628             | 0.569917          | Keep                 |
+   | D3     | 0.137963             | 0.126575             | 0.542969          | Keep                 |
+   | D4     | 0.137298             | 0.096564             | 0.669054          | Keep with caution    |
+   | D5     | 0.176872             | 0.137629             | 0.622866          | Keep with caution    |
+   | D6     | 0.395098             | 0.249988             | 0.714113          | Keep with caution    |
+   | D7     | 0.218888             | 0.189612             | 0.571300          | Keep                 |
+   | D11    | 0.309503             | 0.309009             | 0.500799          | Keep                 |
+   | H2     | 0.187205             | 0.142534             | 0.633032          | Keep with caution    |
+   | H3     | 0.199070             | 0.134930             | 0.685204          | Keep with caution    |
+   | H4     | 0.175411             | 0.144534             | 0.595618          | Keep                 |
+   | H5     | 0.190277             | 0.134288             | 0.667520          | Keep with caution    |
+   | H6     | 0.184351             | 0.138180             | 0.640277          | Keep with caution    |
+   | H7     | 0.194397             | 0.141451             | 0.653824          | Keep with caution    |
 
-   |  | q_sh_score_per_batch | q_sp_score_per_batch | b_score_per_batch | recommendation |
-   |--------|---------------------|---------------------|------------------|----------------|
-   | 10x-Chromium-v2-A | 0.160767 | 0.075598 | 0.818920 | Drop |
-   | 10x-Chromium-v2-B | 0.173909 | 0.054345 | 0.911036 | Drop |
-   | 10x-Chromium-v3 | 0.240570 | 0.101513 | 0.848854 | Drop |
-
-5. **Visualize the results**
+4. **Visualize the results**
 
    ```python
    biolucid.visualization.plot_scatter_analysis(per_sample_results_df)
    ```
 
-   <img src="tests/Quick_start_res_figure.png" alt="bioLUCID q_sh vs q_sp scatter plot" width="420" />
+   <img src="tests/heart_cell_atlas_subsampled_res.png" alt="bioLUCID q_sh vs q_sp scatter plot" width="420" />
 
 
 ## User manual
@@ -181,6 +188,7 @@ When it comes to visualization, we provided one visualization function: `plot_sc
 ```python
 biolucid.visualization.plot_scatter_analysis(per_sample_results_df)
 ```
+<img src="tests/human_pbmc_res.png" alt="bioLUCID q_sh vs q_sp scatter plot" width="420" />
 
 ## License
 
