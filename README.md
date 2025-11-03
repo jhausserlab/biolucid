@@ -10,33 +10,56 @@ Silas Sun, Alper Eroglu, Jean Hausser at Karolinska Institutet & SciLifeLab, Sto
 
 ## Quick start
 
-```python
-$ pip install -i https://test.pypi.org/simple/ biolucid==1.1.0
-```
+1. **Install bioLUCID**
 
-```python
-# Replace the line below with your adata object
-adata = ...
+   ```bash
+   pip install -i https://test.pypi.org/simple/ biolucid==1.1.0
+   ```
 
-# Run bioLUCID
-biolyzer = biolucid.core.BatchEffectAnalyzer(
-    adata,
-    params={'batch_key': 'sample',
-            'celltype_key': 'celltype'})
-biolyzer.run_analysis()
+2. **Download the example data**
 
-# Visualize the results
-global_results_df, per_sample_results_df =
-biolucid.visualization.results_to_df(biolyzer.results)
-[per_sample_table]
-biolucid.visualization.plot_scatter_analysis(per_sample_results_df)
-[plot] 
-```
+   We provide a small, ready-to-use AnnData example (bioLUCID_example_data.h5ad) [here](https://drive.google.com/file/d/1M4-dck3PCICstxxSJ4v51QBYiUpZNQhV/view?usp=sharing). Save it next to your notebook or script.
+
+3. **Run the analyzer**
+
+   ```python
+   import scanpy as sc
+   import biolucid
+
+   adata = sc.read("bioLUCID_example_data.h5ad")
+
+   analyzer = biolucid.core.BatchEffectAnalyzer(
+       adata,
+       params={
+           "batch_key": "sample",
+           "celltype_key": "celltype"
+       }
+   )
+   analyzer.run_analysis()
+
+   global_results_df, per_sample_results_df = biolucid.visualization.results_to_df(analyzer.results)
+   ```
+
+4. **Inspect per-sample statistics**
+
+   |  | q_sh_score_per_batch | q_sp_score_per_batch | b_score_per_batch | recommendation |
+   |--------|---------------------|---------------------|------------------|----------------|
+   | 10x-Chromium-v2-A | 0.160767 | 0.075598 | 0.818920 | Drop |
+   | 10x-Chromium-v2-B | 0.173909 | 0.054345 | 0.911036 | Drop |
+   | 10x-Chromium-v3 | 0.240570 | 0.101513 | 0.848854 | Drop |
+
+5. **Visualize the results**
+
+   ```python
+   biolucid.visualization.plot_scatter_analysis(per_sample_results_df)
+   ```
+
+   <img src="tests/Quick_start_res_figure.png" alt="bioLUCID q_sh vs q_sp scatter plot" width="420" />
 
 
-# User manual
+## User manual
 
-## Installation
+### Installation
 
 1. **System Requirements**
 
@@ -48,11 +71,11 @@ biolucid.visualization.plot_scatter_analysis(per_sample_results_df)
 pip install -i https://test.pypi.org/simple/ biolucid==1.1.0
 ```
 
-## Quick Start
+### bioLUCID Tutorial
 
 - See `tests/Human_PBMC_data_test.ipynb` to walk through bioLUCID tutorial.
 
-### Step0: Preprocessing
+#### Step0: Preprocessing
 
 - bioLUCID requires data in AnnData format (adata object), which is the standard format for single-cell analysis in Python.
 
@@ -73,10 +96,10 @@ pip install -i https://test.pypi.org/simple/ biolucid==1.1.0
   adata = adata[adata.obs.pct_counts_mt < 20, :].copy() # the cutoff can be modified
   ```
 
-### Step1: Load data
+#### Step1: Load data
 
 - The general guideline is to give to bioLUCID the set of samples that you plan to contrast in the downstream analysis. Avoid processing sets of samples from very different tissues tissue types. For example, passing whole tissue scRNAseq from lung and brain to bioLUCID will cause practical issues (finding common cell types and ubiquitously-expressed genes) as well as fundemental ones (all lung cell types may have common transcriptional differences compared to all brain cell types, which bioLUCID will interpret as batch).
-- We provide an example adata containing human pbmc data sequenced on different platforms, which can be downloaded [here](https://drive.google.com/file/d/1-Uuve3sndENFDuVdSm4Ltb3Lnee7LUl8/view?usp=sharing)
+- We provide an example adata containing human pbmc data sequenced on different platforms, which can be downloaded [here](https://drive.google.com/file/d/1M4-dck3PCICstxxSJ4v51QBYiUpZNQhV/view?usp=sharing)
 - To make sure bioLUCID works, the input data should contain:
   - unnormalized UMI counts data in `adata.X` or `adata.layers['counts']`
   - sample identifiers in `adata.obs`, stored as a column `batch` by default (can be parametrized, see below)
@@ -87,7 +110,7 @@ These are the minimal data requirements to run bioLUCID:
 - In all samples, at least **2 cell types** with **more than 20 cells each**
 - In all samples and in all cell types, at least **100 ubiquitously expressed genes** with more than **1 UMIs** per cell on average
 
-### Step2: Initialize analyzer
+#### Step2: Initialize analyzer
 
 - Example command is:
 
@@ -108,7 +131,7 @@ These are the minimal data requirements to run bioLUCID:
 
 - All default parameters can be found in `biolucid.config.DEFAULT_PARAMS`
 
-### Step3: Run analyzer
+#### Step3: Run analyzer
 
 - The use of bioLUCID is extremely straightforward and only requires one line of code
 
@@ -116,7 +139,7 @@ These are the minimal data requirements to run bioLUCID:
   analyzer.run_analysis()
   ```
 
-### Step4: Save results and visualization
+#### Step4: Save and summarize results
 
 - All statistical results can be summarized through `analyzer.results` function into a dictionary, which can be further saved through `pickle`
 
@@ -133,7 +156,7 @@ These are the minimal data requirements to run bioLUCID:
   global_results_df, per_sample_results_df = biolucid.visualization.results_to_df(results)
   ```
 
-#### Results Example
+#### Step5: Interpret per-sample results
 
 The `per_sample_results_df` will contain results in the following format:
 
@@ -151,7 +174,7 @@ The `per_sample_results_df` will contain results in the following format:
 
 Both q_sh and q_sp are measured in units of standard deviation on log expression. See our manuscript for details. At the same time, we also provide advice on the selection of each sample.
 
-#### Visualization
+#### Step6: Visualize the results
 
 When it comes to visualization, we provided one visualization function: `plot_scatter_analysis` to generate qsh_qsp plot
 
@@ -166,4 +189,4 @@ This project is licensed under the MIT License. See the LICENSE file for details
 ## Contact
 
 - Author: Chuhanwen Sun
-- Email: [silas.sun@scilifelab.se](mailto:silas.sun@scilifelab.se)
+- Email: [silaschw0817@gmail.com](mailto:silaschw0817@gmail.com)
