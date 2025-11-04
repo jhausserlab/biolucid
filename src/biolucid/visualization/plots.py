@@ -51,25 +51,51 @@ def results_to_df(results) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
 def plot_scatter_analysis(results_df, figsize=(5, 5)):
     """
-    Plot scatter plots for analysis visualization based on per-sample results.
-    
-    Args:
-        results_df: DataFrame created by create_analysis_df function
-        figsize: Figure size tuple (width, height)
+    Plot scatter plots for analysis visualization based on per-sample results,
+    with two reference proportion lines (b=0.6, b=0.8), without changing axes.
     """
     plt.figure(figsize=figsize)
     
-    # Plot 1: q_sh_score_per_batch vs q_sp_score_per_batch
-    max_val = max(results_df['q_sh_score_per_batch'].max(), 
-                 results_df['q_sp_score_per_batch'].max())
-    sns.scatterplot(data=results_df, x='q_sp_score_per_batch', 
-                   y='q_sh_score_per_batch')
-    plt.plot([0, max_val], [0, max_val], 'k:', label='y=x')
-    plt.title('q_sp_vs_q_sh_score_per_batch')
-    plt.legend()
-    for idx, row in results_df.iterrows():
-        plt.annotate(idx, (row['q_sp_score_per_batch'], 
-                         row['q_sh_score_per_batch']))
+    # --- Scatter plot ---
+    sns.scatterplot(
+        data=results_df,
+        x='q_sp_score_per_batch',
+        y='q_sh_score_per_batch'
+    )
     
+    # --- Save current axis limits ---
+    xlim = plt.xlim()
+    ylim = plt.ylim()
+
+    # --- Add proportion lines (b=0.6, b=0.8) ---
+    x_range = np.linspace(xlim[0], xlim[1], 200)
+    plt.plot(
+        x_range, np.sqrt(0.6 / (1 - 0.6)) * x_range,
+        linestyle='-.', color='darkblue',
+        label='Proportion = 0.6', alpha=0.8, linewidth=1.5
+    )
+    plt.plot(
+        x_range, np.sqrt(0.8 / (1 - 0.8)) * x_range,
+        linestyle='-.', color='darkred',
+        label='Proportion = 0.8', alpha=0.8, linewidth=1.5
+    )
+
+    # --- Restore axis limits so nothing rescaled ---
+    plt.xlim(xlim)
+    plt.ylim(ylim)
+
+    # --- Annotations ---
+    for idx, row in results_df.iterrows():
+        plt.annotate(
+            idx,
+            (row['q_sp_score_per_batch'], row['q_sh_score_per_batch']),
+            fontsize=9, alpha=0.7
+        )
+
+    # --- Labels and formatting ---
+    plt.title('q_sp_vs_q_sh_score_per_batch')
+    plt.xlabel('q_sp_score_per_batch')
+    plt.ylabel('q_sh_score_per_batch')
+    plt.legend()
     plt.tight_layout()
     plt.show()

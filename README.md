@@ -13,7 +13,7 @@ Silas Sun, Alper Eroglu, Jean Hausser at Karolinska Institutet & SciLifeLab, Sto
 1. **Install bioLUCID**
 
    ```bash
-   pip install -i https://test.pypi.org/simple/ biolucid==1.1.0
+   pip install -i https://test.pypi.org/simple/ biolucid==1.1.1
    ```
 
 2. **Run the analyzer**
