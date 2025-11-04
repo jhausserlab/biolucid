@@ -72,12 +72,12 @@ def plot_scatter_analysis(results_df, figsize=(5, 5)):
     plt.plot(
         x_range, np.sqrt(0.6 / (1 - 0.6)) * x_range,
         linestyle='-.', color='darkblue',
-        label='Proportion = 0.6', alpha=0.8, linewidth=1.5
+        label='60% batch', alpha=0.8, linewidth=1.5
     )
     plt.plot(
         x_range, np.sqrt(0.8 / (1 - 0.8)) * x_range,
         linestyle='-.', color='darkred',
-        label='Proportion = 0.8', alpha=0.8, linewidth=1.5
+        label='80% batch', alpha=0.8, linewidth=1.5
     )
 
     # --- Restore axis limits so nothing rescaled ---
@@ -93,9 +93,8 @@ def plot_scatter_analysis(results_df, figsize=(5, 5)):
         )
 
     # --- Labels and formatting ---
-    plt.title('q_sp_vs_q_sh_score_per_batch')
-    plt.xlabel('q_sp_score_per_batch')
-    plt.ylabel('q_sh_score_per_batch')
+    plt.xlabel('qsp score per batch')
+    plt.ylabel('qsh score per batch')
     plt.legend()
     plt.tight_layout()
     plt.show()
