@@ -63,6 +63,7 @@ Silas Sun, Alper Eroglu, Jean Hausser at Karolinska Institutet & SciLifeLab, Sto
 
    <img src="tests/heart_cell_atlas_subsampled_res.png" alt="bioLUCID q_sh vs q_sp scatter plot" width="420" />
 
+   With no sample over the "80% batch effect" line, these results suggest that batch effects are all low enough in all the samples of this dataset to include them all for  downstream analyses (marker analysis, trajectory analysis, machine-learning, etc.).
 
 ## User manual
 
